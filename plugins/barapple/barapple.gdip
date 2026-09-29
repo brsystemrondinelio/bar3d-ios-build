@@ -1,0 +1,17 @@
+[config]
+name="BarApple"
+binary="barapple.xcframework"
+
+initialization="register_barapple_types"
+deinitialization="unregister_barapple_types"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=["AuthenticationServices.framework"]
+
+capabilities=[]
+
+files=[]
+
+[plist]

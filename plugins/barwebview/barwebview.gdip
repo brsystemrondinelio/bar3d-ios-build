@@ -1,0 +1,17 @@
+[config]
+name="BarWebView"
+binary="barwebview.xcframework"
+
+initialization="register_barwebview_types"
+deinitialization="unregister_barwebview_types"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=["WebKit.framework", "UIKit.framework", "AVFoundation.framework"]
+
+capabilities=[]
+
+files=[]
+
+[plist]

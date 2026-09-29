@@ -1,0 +1,50 @@
+# Compila os plugins nativos do Bar 3D (janela web e Sign in with Apple) contra o
+# Godot 4.7.2 e guarda o resultado como artefato. So dispara sob pedido.
+name: Plugins do iPhone
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plugins:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode mais novo instalado
+        run: |
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Cabecalhos do Godot 4.7.2
+        run: |
+          brew install scons
+          git clone --depth 1 --branch 4.7.2-stable https://github.com/godotengine/godot.git godot
+          cd godot
+          # O alvo editor so serve para GERAR os cabecalhos (.gen.h); a ligacao pode falhar.
+          scons platform=ios target=editor || true
+          ls core/version_generated.gen.h
+
+      - name: Compilar os plugins
+        run: |
+          chmod +x scripts/*.sh
+          mkdir -p bin out
+          for plugin in barwebview barapple; do
+            ./scripts/generate_xcframework.sh $plugin release 4.0
+            ./scripts/generate_xcframework.sh $plugin release_debug 4.0
+            mv bin/$plugin.release_debug.xcframework bin/$plugin.debug.xcframework
+            mkdir -p out/$plugin
+            cp -R bin/$plugin.release.xcframework bin/$plugin.debug.xcframework out/$plugin/
+            cp plugins/$plugin/$plugin.gdip out/$plugin/
+          done
+          cd out && zip -qr ../plugins-ios.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugins-ios
+          path: plugins-ios.zip
