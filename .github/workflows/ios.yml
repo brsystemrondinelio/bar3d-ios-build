@@ -1,0 +1,64 @@
+# Compila o Bar 3D para iPhone num Mac do GitHub e envia ao TestFlight.
+# O jogo NAO esta neste repositorio: o pacote e baixado do nosso servidor com uma
+# chave guardada nos Segredos. So dispara sob pedido (workflow_dispatch).
+name: Bar 3D iPhone
+
+on:
+  workflow_dispatch:
+    inputs:
+      pacote:
+        description: "Arquivo do pacote no servidor (ex.: bar3d_ios_1.12_2.tar.gz)"
+        required: true
+        default: "bar3d_ios_1.12_2.tar.gz"
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      BUNDLE_ID: com.r7games.virtual3dcasino
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+    steps:
+      - name: Xcode mais novo instalado
+        run: |
+          ls -d /Applications/Xcode*.app
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Ferramentas de assinatura e envio
+        run: pip3 install --quiet codemagic-cli-tools
+
+      - name: Baixar o projeto Xcode do servidor
+        env:
+          CHAVE_BUILD: ${{ secrets.CHAVE_BUILD }}
+          PACOTE: ${{ inputs.pacote }}
+        run: |
+          set -e
+          curl -fsSL --retry 3 -H "X-Chave-Build: $CHAVE_BUILD" \
+            -o projeto.tar.gz "https://jogosonline.top/_build/bar3d-ios/$PACOTE"
+          mkdir projeto && tar -xzf projeto.tar.gz -C projeto
+          ls projeto
+
+      - name: Assinatura (certificado e perfil na Apple)
+        run: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          cd projeto && xcode-project use-profiles
+
+      - name: Compilar o .ipa
+        run: |
+          cd projeto
+          xcode-project build-ipa --project Bar3D.xcodeproj --scheme Bar3D
+
+      - name: Enviar ao TestFlight
+        run: |
+          app-store-connect publish --path "projeto/build/ios/ipa/Bar3D.ipa"
