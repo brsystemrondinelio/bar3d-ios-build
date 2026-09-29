@@ -33,7 +33,10 @@ jobs:
           xcodebuild -version
 
       - name: Ferramentas de assinatura e envio
-        run: pip3 install --quiet codemagic-cli-tools
+        run: |
+          python3 -m venv "$HOME/cm"
+          "$HOME/cm/bin/pip" install --quiet codemagic-cli-tools
+          echo "$HOME/cm/bin" >> "$GITHUB_PATH"
 
       - name: Baixar o projeto Xcode do servidor
         env:
