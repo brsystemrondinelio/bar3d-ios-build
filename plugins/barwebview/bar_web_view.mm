@@ -28,6 +28,7 @@ static NSString *const kToqueJS = @"function(a,x,y){"
 @property(nonatomic, strong) NSTimer *timer;
 @property(nonatomic, assign) BOOL emVoo;
 @property(nonatomic, assign) int quadros;
+@property(nonatomic, assign) int quedas;
 @property(nonatomic, assign) int largura;
 @property(nonatomic, assign) int altura;
 - (void)abrir:(NSString *)url largura:(int)w altura:(int)h;
@@ -95,6 +96,7 @@ static NSString *const kToqueJS = @"function(a,x,y){"
 - (void)abrirSobreposto:(NSString *)url {
 	[self fechar];
 	self.quadros = 0;
+	self.quedas = 0;
 	WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
 	cfg.allowsInlineMediaPlayback = YES;
 	cfg.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
@@ -196,6 +198,23 @@ static NSString *const kToqueJS = @"function(a,x,y){"
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
 	if (self.owner) {
 		self.owner->_emit_page_loaded(String::utf8(webView.URL.absoluteString.UTF8String ?: ""));
+	}
+}
+
+// O iOS MATA O PROCESSO DA PAGINA quando falta memoria (jogos Unity pesados). Sem
+// tratar isto, o WebKit recarrega a pagina sozinho -- e o jogo ficava num LOOP:
+// carregando, janela preta, some, carregando (TV Milionario, 29/09). Aqui: uma
+// tentativa de recarregar; na segunda queda, esconde a janela e avisa o jogo.
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
+	self.quedas += 1;
+	if (self.owner) {
+		self.owner->_emit_page_failed(String("processo_encerrado_") + String::num_int64(self.quedas));
+	}
+	if (self.quedas <= 1) {
+		[webView reload];
+	} else {
+		webView.hidden = YES;
+		[webView stopLoading];
 	}
 }
 
