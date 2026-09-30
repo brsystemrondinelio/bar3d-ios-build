@@ -78,7 +78,6 @@ jobs:
           end
           proj.save
           RB
-          sed -i 's/^          //' add_dep.rb
           ruby add_dep.rb projeto/Bar3D.xcodeproj https://github.com/googleads/swift-package-manager-google-mobile-ads.git 12.14.0 GoogleMobileAds
           cd projeto && xcodebuild -resolvePackageDependencies -project Bar3D.xcodeproj -scheme Bar3D
 
