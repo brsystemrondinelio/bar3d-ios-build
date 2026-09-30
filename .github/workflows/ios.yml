@@ -49,6 +49,39 @@ jobs:
           mkdir projeto && tar -xzf projeto.tar.gz -C projeto
           ls projeto
 
+      - name: SDK de anuncios (AdMob) como pacote Swift
+        # O Godot no Windows nao consegue anexar o pacote (precisa de Ruby + xcodeproj, so no Mac).
+        # Aqui o Mac anexa o Google Mobile Ads ao projeto antes de compilar.
+        run: |
+          set -e
+          sudo gem install xcodeproj --no-document
+          cat > add_dep.rb <<'RB'
+          require 'xcodeproj'
+          caminho, url, versao, produto = ARGV
+          proj = Xcodeproj::Project.open(caminho)
+          alvo = proj.targets.first
+          if alvo.package_product_dependencies.any? { |d| d.product_name == produto }
+            puts "ja existe: #{produto}"
+          else
+            pkg = proj.root_object.package_references.find { |p| p.repositoryURL == url }
+            if pkg.nil?
+              pkg = proj.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+              pkg.repositoryURL = url
+              pkg.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => versao }
+              proj.root_object.package_references << pkg
+            end
+            ref = proj.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+            ref.product_name = produto
+            ref.package = pkg
+            alvo.package_product_dependencies << ref
+            puts "adicionado: #{produto}"
+          end
+          proj.save
+          RB
+          sed -i 's/^          //' add_dep.rb
+          ruby add_dep.rb projeto/Bar3D.xcodeproj https://github.com/googleads/swift-package-manager-google-mobile-ads.git 12.14.0 GoogleMobileAds
+          cd projeto && xcodebuild -resolvePackageDependencies -project Bar3D.xcodeproj -scheme Bar3D
+
       - name: Assinatura (certificado e perfil na Apple)
         run: |
           set -e
