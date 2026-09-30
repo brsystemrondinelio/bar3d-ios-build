@@ -1,0 +1,86 @@
+# Compila o Video Bingo Classico (Super King Bingo) para iPhone num Mac do GitHub e envia ao TestFlight.
+# O projeto Xcode e gerado no Windows (Unity 6, BuildLeve.ExportarIOS) e guardado no nosso servidor;
+# aqui ele e baixado com uma chave guardada nos Segredos. Nao contem o jogo nem chaves.
+# So dispara sob pedido (workflow_dispatch). Vai apenas ao TestFlight (grupo interno): nao submete a revisao.
+name: King Bingo iPhone
+
+on:
+  workflow_dispatch:
+    inputs:
+      pacote:
+        description: "Arquivo do pacote no servidor (ex.: kingbingo_ios_4.0_43.tar.gz)"
+        required: true
+        default: "kingbingo_ios_4.0_43.tar.gz"
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      BUNDLE_ID: com.r7developers.kingbingo
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+    steps:
+      - name: Xcode mais novo instalado
+        run: |
+          ls -d /Applications/Xcode*.app
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Ferramentas de assinatura e envio
+        run: |
+          python3 -m venv "$HOME/cm"
+          "$HOME/cm/bin/pip" install --quiet codemagic-cli-tools
+          echo "$HOME/cm/bin" >> "$GITHUB_PATH"
+
+      - name: Baixar o projeto Xcode do servidor
+        env:
+          CHAVE_BUILD: ${{ secrets.CHAVE_BUILD }}
+          PACOTE: ${{ inputs.pacote }}
+        run: |
+          set -e
+          curl -fsSL --retry 3 -H "X-Chave-Build: $CHAVE_BUILD" \
+            -o projeto.tar.gz "https://jogosonline.top/_build/bar3d-ios/$PACOTE"
+          tar -xzf projeto.tar.gz
+          # Pacote montado no Windows perde a permissao de execucao: sem isto o Xcode para em
+          # "usymtoolarm64: Permission denied".
+          find ios -type f \( -name "*.sh" -o ! -name "*.*" \) -exec chmod +x {} +
+          ls ios
+
+      - name: Instalar os pods (AdMob)
+        run: |
+          cd ios
+          # A linha da fonte completa do CocoaPods clona varios GB; o CDN ja esta no Podfile.
+          sed -i '' '/github.com\/CocoaPods\/Specs/d' Podfile
+          pod install
+
+      - name: Assinatura (certificado e perfil na Apple)
+        run: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          cd ios && xcode-project use-profiles
+
+      - name: Compilar o .ipa
+        run: |
+          cd ios
+          xcode-project build-ipa --workspace Unity-iPhone.xcworkspace --scheme Unity-iPhone
+
+      - name: Tamanho do app
+        run: |
+          IPA=$(ls ios/build/ios/ipa/*.ipa | head -1)
+          echo "IPA: $IPA"
+          ls -l "$IPA" | awk '{printf "Tamanho do .ipa: %.1f MB\n", $5/1048576}'
+          echo "Maiores arquivos dentro do .ipa:"
+          unzip -l "$IPA" | sort -k1 -n -r | head -15
+
+      - name: Enviar ao TestFlight
+        run: |
+          app-store-connect publish --path ios/build/ios/ipa/*.ipa
