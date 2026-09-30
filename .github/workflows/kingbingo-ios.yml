@@ -73,6 +73,22 @@ jobs:
           cd ios
           xcode-project build-ipa --workspace Unity-iPhone.xcworkspace --scheme Unity-iPhone
 
+      - name: Diagnostico do erro de compilacao
+        if: failure()
+        run: |
+          for f in /tmp/xcodebuild_logs/*.log; do
+            echo "== $f"
+            grep -n -A40 "Undefined symbols" "$f" | head -120
+          done
+
+      - name: Guardar o log completo do Xcode
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-logs
+          path: /tmp/xcodebuild_logs
+          retention-days: 3
+
       - name: Tamanho do app
         run: |
           IPA=$(ls ios/build/ios/ipa/*.ipa | head -1)
