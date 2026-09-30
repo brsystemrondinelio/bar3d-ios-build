@@ -1,0 +1,73 @@
+# Compila o Era do Gelo para iPhone num Mac do GitHub e envia ao TestFlight.
+# O jogo NAO esta neste repositorio: o projeto Xcode (gerado no Windows pelo Unity) e baixado do
+# nosso servidor com uma chave guardada nos Segredos. So dispara sob pedido (workflow_dispatch).
+# Substitui o Codemagic (minutos gratis acabaram em 29/09/2026).
+name: Era do Gelo iPhone
+
+on:
+  workflow_dispatch:
+    inputs:
+      pacote:
+        description: "Arquivo do pacote no servidor (ex.: eradogelo_ios_1.39_43.tar.gz)"
+        required: true
+        default: "eradogelo_ios_1.39_43.tar.gz"
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      BUNDLE_ID: com.r7developers.eradogelo
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+    steps:
+      - name: Xcode mais novo instalado
+        run: |
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Ferramentas de assinatura e envio
+        run: |
+          python3 -m venv "$HOME/cm"
+          "$HOME/cm/bin/pip" install --quiet codemagic-cli-tools
+          echo "$HOME/cm/bin" >> "$GITHUB_PATH"
+
+      - name: Baixar o projeto Xcode do servidor
+        env:
+          CHAVE_BUILD: ${{ secrets.CHAVE_BUILD_ERADOGELO }}
+          PACOTE: ${{ inputs.pacote }}
+        run: |
+          set -e
+          curl -fsSL --retry 3 -H "X-Chave-Build: $CHAVE_BUILD" \
+            -o projeto.tar.gz "https://jogosonline.top/_build/eradogelo-ios/$PACOTE"
+          tar -xzf projeto.tar.gz
+          # O pacote vem do Windows, que nao guarda a permissao de execucao do Mac. Sem isto o
+          # Xcode para em "usymtoolarm64: Permission denied" (build de 23/09/2026).
+          find ios -type f \( -name "*.sh" -o ! -name "*.*" \) -exec chmod +x {} +
+          ls -l ios/usymtool ios/usymtoolarm64 ios/process_symbols.sh
+
+      - name: Instalar os pods (LevelPlay e adaptador do Unity Ads)
+        run: |
+          cd ios && pod install
+
+      - name: Assinatura (certificado e perfil na Apple)
+        run: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Compilar o .ipa
+        run: |
+          xcode-project build-ipa --workspace ios/Unity-iPhone.xcworkspace --scheme Unity-iPhone
+
+      - name: Enviar ao TestFlight
+        run: |
+          app-store-connect publish --path build/ios/ipa/*.ipa
