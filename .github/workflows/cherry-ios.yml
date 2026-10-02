@@ -50,7 +50,6 @@ jobs:
           # O pacote vem do Windows, que nao guarda a permissao de execucao do Mac. Sem isto o
           # Xcode para em "usymtoolarm64: Permission denied" (build de 23/09/2026).
           find ios -type f \( -name "*.sh" -o ! -name "*.*" \) -exec chmod +x {} +
-          ls -l ios/usymtool ios/usymtoolarm64 ios/process_symbols.sh
 
       - name: Instalar os pods (Google Mobile Ads e UMP)
         run: |
