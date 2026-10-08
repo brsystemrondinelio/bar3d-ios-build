@@ -8,7 +8,7 @@ deinitialization="unregister_barapple_types"
 [dependencies]
 linked=[]
 embedded=[]
-system=["AuthenticationServices.framework"]
+system=["AuthenticationServices.framework", "AppTrackingTransparency.framework"]
 
 capabilities=[]
 

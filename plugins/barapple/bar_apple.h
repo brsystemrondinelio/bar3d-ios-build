@@ -23,6 +23,9 @@ class BarApple : public Object {
 
 public:
 	void sign_in();
+	// Pede a permissao de rastreamento (ATT). Resposta: sinal att_pronto(estado), estado = 0 nao perguntado, 1 restrito, 2 negado, 3 autorizado.
+	void request_tracking();
+	void _emit_att(int p_estado);
 
 	void _emit_ok(const String &p_token, const String &p_user, const String &p_name);
 	void _emit_fail(const String &p_message);

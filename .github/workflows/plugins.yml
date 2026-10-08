@@ -34,7 +34,7 @@ jobs:
         run: |
           chmod +x scripts/*.sh
           mkdir -p bin out
-          for plugin in barwebview barapple; do
+          for plugin in barwebview barapple barstore; do
             ./scripts/generate_xcframework.sh $plugin release 4.0
             ./scripts/generate_xcframework.sh $plugin release_debug 4.0
             mv bin/$plugin.release_debug.xcframework bin/$plugin.debug.xcframework

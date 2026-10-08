@@ -1,0 +1,17 @@
+[config]
+name="BarStore"
+binary="barstore.xcframework"
+
+initialization="register_barstore_types"
+deinitialization="unregister_barstore_types"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=["StoreKit.framework"]
+
+capabilities=[]
+
+files=[]
+
+[plist]

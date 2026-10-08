@@ -2,6 +2,7 @@
 
 #import <AuthenticationServices/AuthenticationServices.h>
 #import <UIKit/UIKit.h>
+#import <AppTrackingTransparency/AppTrackingTransparency.h>
 
 @interface BarAppleHost : NSObject <ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding>
 @property(nonatomic, assign) BarApple *owner;
@@ -66,6 +67,8 @@ BarApple *BarApple::instance = nullptr;
 
 void BarApple::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("sign_in"), &BarApple::sign_in);
+	ClassDB::bind_method(D_METHOD("request_tracking"), &BarApple::request_tracking);
+	ADD_SIGNAL(MethodInfo("att_pronto", PropertyInfo(Variant::INT, "estado")));
 
 	ADD_SIGNAL(MethodInfo("apple_ok", PropertyInfo(Variant::STRING, "token"), PropertyInfo(Variant::STRING, "user"), PropertyInfo(Variant::STRING, "name")));
 	ADD_SIGNAL(MethodInfo("apple_fail", PropertyInfo(Variant::STRING, "message")));
@@ -83,6 +86,24 @@ void BarApple::sign_in() {
 		}
 		[this->host entrar];
 	});
+}
+
+void BarApple::request_tracking() {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		if (@available(iOS 14, *)) {
+			[ATTrackingManager requestTrackingAuthorizationWithCompletionHandler:^(ATTrackingManagerAuthorizationStatus status) {
+				dispatch_async(dispatch_get_main_queue(), ^{
+					this->_emit_att((int)status);
+				});
+			}];
+		} else {
+			this->_emit_att(3);
+		}
+	});
+}
+
+void BarApple::_emit_att(int p_estado) {
+	emit_signal("att_pronto", p_estado);
 }
 
 void BarApple::_emit_ok(const String &p_token, const String &p_user, const String &p_name) {
