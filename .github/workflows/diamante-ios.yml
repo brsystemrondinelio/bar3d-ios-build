@@ -1,0 +1,66 @@
+# Diamante Classico (Godot 4.7.2): CONFERE que o projeto Xcode exportado no Windows compila para iPhone, com o
+# SDK do Yodo1 (pod Yodo1MasFull) e os plugins barstore/yodo1ios. NAO assina e NAO envia nada para a Apple
+# (decisao do dono, 20/11/2026: nada para as lojas por enquanto). O projeto e baixado do nosso servidor
+# (mesma pasta e chave do Cherry/Pocket). So dispara sob pedido.
+name: Diamante iPhone (so compila)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pacote:
+        description: "Arquivo do pacote no servidor (ex.: diamante_ios_1.0.0_1.tar.gz)"
+        required: true
+        default: "diamante_ios_1.0.0_1.tar.gz"
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Xcode mais novo instalado
+        run: |
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Baixar o projeto Xcode do servidor
+        env:
+          CHAVE_BUILD: ${{ secrets.CHAVE_BUILD_CHERRY }}
+          PACOTE: ${{ inputs.pacote }}
+        run: |
+          set -e
+          curl -fsSL --retry 3 -H "X-Chave-Build: $CHAVE_BUILD" \
+            -o projeto.tar.gz "https://jogosonline.top/_build/cherry-ios/$PACOTE"
+          tar -xzf projeto.tar.gz
+          ls diamante_ios
+
+      - name: Instalar o SDK do Yodo1 (CocoaPods)
+        run: |
+          set -e
+          cd diamante_ios
+          cat > Podfile <<'POD'
+          platform :ios, '15.0'
+          use_frameworks!
+          target 'DiamanteClassico' do
+            pod 'Yodo1MasFull', '4.18.0'
+          end
+          POD
+          pod install
+
+      - name: Compilar sem assinar
+        run: |
+          set -o pipefail
+          cd diamante_ios
+          xcodebuild -workspace DiamanteClassico.xcworkspace -scheme DiamanteClassico -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tee ../xcode_build.log | tail -40
+
+      - name: Log da compilacao
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode_build_log
+          path: xcode_build.log

@@ -1,0 +1,17 @@
+[config]
+name="Yodo1Ios"
+binary="yodo1ios.xcframework"
+
+initialization="register_yodo1ios_types"
+deinitialization="unregister_yodo1ios_types"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=["AppTrackingTransparency.framework", "AdSupport.framework"]
+
+capabilities=[]
+
+files=[]
+
+[plist]

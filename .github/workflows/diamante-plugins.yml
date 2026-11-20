@@ -1,0 +1,50 @@
+# Diamante Classico (Godot 4.7.2): compila os plugins nativos do iPhone que o jogo usa -- barstore (compras pela
+# App Store, StoreKit) e yodo1ios (video premiado do Yodo1 MAS) -- e guarda como artefato "plugins-diamante".
+# O zip vai para res://ios/plugins/ do projeto antes de exportar o projeto Xcode no Windows. So sob pedido.
+name: Diamante plugins iPhone
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plugins:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode mais novo instalado
+        run: |
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Cabecalhos do Godot 4.7.2
+        run: |
+          brew install scons
+          git clone --depth 1 --branch 4.7.2-stable https://github.com/godotengine/godot.git godot
+          cd godot
+          scons platform=ios target=editor || true
+          ls core/version_generated.gen.h
+
+      - name: Compilar os plugins
+        run: |
+          chmod +x scripts/*.sh
+          mkdir -p bin out
+          for plugin in barstore yodo1ios; do
+            ./scripts/generate_xcframework.sh $plugin release 4.0
+            ./scripts/generate_xcframework.sh $plugin release_debug 4.0
+            mv bin/$plugin.release_debug.xcframework bin/$plugin.debug.xcframework
+            mkdir -p out/$plugin
+            cp -R bin/$plugin.release.xcframework bin/$plugin.debug.xcframework out/$plugin/
+            cp plugins/$plugin/$plugin.gdip out/$plugin/
+          done
+          cd out && zip -qr ../plugins-diamante.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugins-diamante
+          path: plugins-diamante.zip
