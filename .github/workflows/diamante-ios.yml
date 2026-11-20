@@ -42,10 +42,21 @@ jobs:
           set -e
           cd diamante_ios
           cat > Podfile <<'POD'
+          source 'https://github.com/Yodo1Games/MAS-Spec.git'
+          source 'https://cdn.cocoapods.org/'
           platform :ios, '15.0'
           use_frameworks!
           target 'DiamanteClassico' do
             pod 'Yodo1MasFull', '4.18.0'
+          end
+          post_install do |installer|
+            installer.generated_projects.each do |projeto|
+              projeto.targets.each do |alvo|
+                alvo.build_configurations.each do |config|
+                  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+                end
+              end
+            end
           end
           POD
           pod install
