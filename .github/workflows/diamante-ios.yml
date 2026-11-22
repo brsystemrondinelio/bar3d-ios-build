@@ -1,5 +1,6 @@
 # Diamante Classico (Godot 4.7.2): CONFERE que o projeto Xcode exportado no Windows compila para iPhone, com o
-# SDK do Yodo1 (pod Yodo1MasFull) e os plugins barstore/yodo1ios. NAO assina e NAO envia nada para a Apple
+# SDK do AdMob (pods Google-Mobile-Ads-SDK e GoogleUserMessagingPlatform; conta da R7) e os plugins barstore/admobios.
+# Com "simulador" ligado, tambem abre o jogo num iPhone SIMULADO, guarda o console e fotos (artefato). NAO assina e NAO envia nada para a Apple
 # (decisao do dono, 20/11/2026: nada para as lojas por enquanto). O projeto e baixado do nosso servidor
 # (mesma pasta e chave do Cherry/Pocket). So dispara sob pedido.
 name: Diamante iPhone (so compila)
@@ -11,6 +12,10 @@ on:
         description: "Arquivo do pacote no servidor (ex.: diamante_ios_1.0.0_1.tar.gz)"
         required: true
         default: "diamante_ios_1.0.0_1.tar.gz"
+      simulador:
+        description: "Tambem abrir no iPhone simulado (fotos + console)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,17 +42,17 @@ jobs:
           tar -xzf projeto.tar.gz
           ls diamante_ios
 
-      - name: Instalar o SDK do Yodo1 (CocoaPods)
+      - name: Instalar o SDK do AdMob (CocoaPods)
         run: |
           set -e
           cd diamante_ios
           cat > Podfile <<'POD'
-          source 'https://github.com/Yodo1Games/MAS-Spec.git'
           source 'https://cdn.cocoapods.org/'
           platform :ios, '15.0'
           use_frameworks!
           target 'DiamanteClassico' do
-            pod 'Yodo1MasFull', '4.18.0'
+            pod 'Google-Mobile-Ads-SDK', '13.12.0'
+            pod 'GoogleUserMessagingPlatform', '3.1.0'
           end
           post_install do |installer|
             installer.generated_projects.each do |projeto|
@@ -75,3 +80,35 @@ jobs:
         with:
           name: xcode_build_log
           path: xcode_build.log
+
+      - name: Compilar para o simulador
+        if: inputs.simulador
+        run: |
+          set -o pipefail
+          cd diamante_ios
+          xcodebuild -workspace DiamanteClassico.xcworkspace -scheme DiamanteClassico -configuration Release             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO             -derivedDataPath ../sim CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ../xcode_sim.log | tail -20
+
+      - name: Abrir no iPhone simulado
+        if: inputs.simulador
+        run: |
+          set -x
+          mkdir -p fotos
+          APP=$(find sim/Build/Products -name 'DiamanteClassico.app' -maxdepth 3 | head -1)
+          ID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print([x['udid'] for k,v in d.items() if 'iOS' in k for x in v if 'iPhone' in x['name']][-1])")
+          xcrun simctl boot "$ID"
+          xcrun simctl bootstatus "$ID" -b
+          xcrun simctl install "$ID" "$APP"
+          xcrun simctl spawn "$ID" log stream --style compact --predicate 'process == "DiamanteClassico"' > fotos/log_sistema.txt 2>&1 &
+          (timeout 150 xcrun simctl launch --console-pty "$ID" com.r7games.diamanteclassico > fotos/console.txt 2>&1 || true) &
+          for i in $(seq 1 14); do sleep 10; xcrun simctl io "$ID" screenshot "fotos/foto_$((i*10))s.png" || true; done
+          sleep 15
+          grep -a "TESTE_ADMOB\|AdMobGodot" fotos/console.txt fotos/log_sistema.txt | head -60 || true
+
+      - name: Fotos e console do simulador
+        if: always() && inputs.simulador
+        uses: actions/upload-artifact@v4
+        with:
+          name: fotos_simulador
+          path: |
+            fotos
+            xcode_sim.log

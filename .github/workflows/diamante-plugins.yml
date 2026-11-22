@@ -1,5 +1,5 @@
 # Diamante Classico (Godot 4.7.2): compila os plugins nativos do iPhone que o jogo usa -- barstore (compras pela
-# App Store, StoreKit) e yodo1ios (video premiado do Yodo1 MAS) -- e guarda como artefato "plugins-diamante".
+# App Store, StoreKit) e admobios (anuncios do AdMob da R7: video, intersticial e banner) -- e guarda como artefato "plugins-diamante".
 # O zip vai para res://ios/plugins/ do projeto antes de exportar o projeto Xcode no Windows. So sob pedido.
 name: Diamante plugins iPhone
 
@@ -34,7 +34,7 @@ jobs:
         run: |
           chmod +x scripts/*.sh
           mkdir -p bin out
-          for plugin in barstore yodo1ios; do
+          for plugin in barstore admobios; do
             ./scripts/generate_xcframework.sh $plugin release 4.0
             ./scripts/generate_xcframework.sh $plugin release_debug 4.0
             mv bin/$plugin.release_debug.xcframework bin/$plugin.debug.xcframework

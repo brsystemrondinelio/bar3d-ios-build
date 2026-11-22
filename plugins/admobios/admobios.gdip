@@ -1,0 +1,17 @@
+[config]
+name="AdMobIos"
+binary="admobios.xcframework"
+
+initialization="register_admobios_types"
+deinitialization="unregister_admobios_types"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=["AppTrackingTransparency.framework", "AdSupport.framework"]
+
+capabilities=[]
+
+files=[]
+
+[plist]
