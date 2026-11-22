@@ -46,6 +46,10 @@ jobs:
         run: |
           set -e
           cd diamante_ios
+          # O Godot grava OTHER_LDFLAGS do app SEM $(inherited): sem isto as opcoes dos pods (-ObjC e
+          # -framework GoogleMobileAds) nao chegam ao app e o SDK fica de fora (o plugin acha as classes pelo nome).
+          perl -pi -e 's/OTHER_LDFLAGS = "\$\(LD_CLASSIC/OTHER_LDFLAGS = "\$(inherited) -ObjC \$(LD_CLASSIC/' DiamanteClassico.xcodeproj/project.pbxproj
+          grep -n "OTHER_LDFLAGS" DiamanteClassico.xcodeproj/project.pbxproj
           cat > Podfile <<'POD'
           source 'https://cdn.cocoapods.org/'
           platform :ios, '15.0'
@@ -102,7 +106,7 @@ jobs:
           xcrun simctl launch --stdout="$PWD/fotos/console.txt" --stderr="$PWD/fotos/console_erro.txt" "$ID" com.r7games.diamanteclassico
           for i in $(seq 1 14); do sleep 10; xcrun simctl io "$ID" screenshot "fotos/foto_$((i*10))s.png" || true; done
           sleep 15
-          grep -a -h "TESTE_ADMOB\|AdMobGodot" fotos/console.txt fotos/console_erro.txt fotos/log_sistema.txt | head -60 || true
+          grep -a -h -i "TESTE_ADMOB|AdMobGodot|GADMobileAds|Google Mobile Ads"\|AdMobGodot" fotos/console.txt fotos/console_erro.txt fotos/log_sistema.txt | head -60 || true
 
       - name: Fotos e console do simulador
         if: always() && inputs.simulador
