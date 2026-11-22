@@ -1,0 +1,95 @@
+# Abre o Cherry Master no SIMULADOR (iPad e iPhone) num Mac do GitHub e fotografa a tela, para reproduzir
+# recusas da Apple do tipo "tela em branco na abertura". Nao assina nem envia nada. So sob pedido.
+# O pacote e um projeto Xcode gerado com o SDK do simulador (PlayerSettings.iOS.sdkVersion = SimulatorSDK).
+name: Cherry Master no simulador
+
+on:
+  workflow_dispatch:
+    inputs:
+      pacote:
+        description: "Arquivo do pacote no servidor (projeto Xcode do simulador)"
+        required: true
+      segundos:
+        description: "Quanto tempo fotografar depois de abrir"
+        required: false
+        default: "90"
+
+permissions:
+  contents: read
+
+jobs:
+  simulador:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Xcode mais novo instalado
+        run: |
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+          xcrun simctl list devicetypes | grep -i -E "ipad|iphone" | tail -25
+          xcrun simctl list runtimes
+
+      - name: Baixar o projeto Xcode do servidor
+        env:
+          CHAVE_BUILD: ${{ secrets.CHAVE_BUILD_CHERRY }}
+          PACOTE: ${{ inputs.pacote }}
+        run: |
+          set -e
+          curl -fsSL --retry 3 -H "X-Chave-Build: $CHAVE_BUILD" \
+            -o projeto.tar.gz "https://jogosonline.top/_build/cherry-ios/$PACOTE"
+          tar -xzf projeto.tar.gz
+          find ios -type f \( -name "*.sh" -o ! -name "*.*" \) -exec chmod +x {} +
+
+      - name: Instalar os pods
+        run: |
+          set -e
+          cd ios
+          sed -i '' $'1s/^\xEF\xBB\xBF//' Podfile
+          sed -i '' "/source 'https:\/\/github.com\/CocoaPods\/Specs/d" Podfile
+          pod install
+
+      - name: Compilar para o simulador
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/Unity-iPhone.xcworkspace -scheme Unity-iPhone -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath dd \
+            CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build 2>&1 | tee xcode_sim.log | grep -E "error|warning: .*Firebase|BUILD" | tail -40
+          ls dd/Build/Products/*/
+
+      - name: Abrir no iPad e no iPhone e fotografar
+        env:
+          SEGUNDOS: ${{ inputs.segundos }}
+        run: |
+          set -x
+          APP=$(ls -d dd/Build/Products/*-iphonesimulator/*.app | head -1)
+          RT=$(xcrun simctl list runtimes | grep -o 'com.apple.CoreSimulator.SimRuntime.iOS-[0-9-]*' | sort -V | tail -1)
+          mkdir -p fotos
+          for TIPO in "iPad Air 11-inch (M3)" "iPad Pro 13-inch (M4)" "iPhone 16 Pro Max"; do
+            DT=$(xcrun simctl list devicetypes | grep -F "$TIPO" | grep -o 'com.apple.CoreSimulator.SimDeviceType[^)]*' | head -1)
+            if [ -z "$DT" ]; then echo "sem $TIPO"; continue; fi
+            NOME=$(echo "$TIPO" | tr -cd 'A-Za-z0-9')
+            UDID=$(xcrun simctl create "$NOME" "$DT" "$RT")
+            xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+            xcrun simctl install "$UDID" "$APP"
+            ( xcrun simctl launch --console-pty "$UDID" com.r7games.diamondslot > "fotos/$NOME.console.log" 2>&1 & )
+            xcrun simctl spawn "$UDID" log stream --style compact --predicate 'process == "Diamond Dog" OR subsystem CONTAINS "Unity"' > "fotos/$NOME.sistema.log" 2>&1 &
+            LOGPID=$!
+            t=0
+            while [ $t -le $SEGUNDOS ]; do
+              xcrun simctl io "$UDID" screenshot "fotos/${NOME}_$(printf %03d $t)s.png" >/dev/null 2>&1
+              sleep 5; t=$((t+5))
+            done
+            kill $LOGPID || true
+            xcrun simctl shutdown "$UDID" || true
+          done
+          ls -la fotos
+
+      - name: Guardar fotos e registros
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fotos_simulador
+          path: |
+            fotos/
+            xcode_sim.log
