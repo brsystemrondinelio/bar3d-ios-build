@@ -106,7 +106,7 @@ jobs:
           xcrun simctl launch --stdout="$PWD/fotos/console.txt" --stderr="$PWD/fotos/console_erro.txt" "$ID" com.r7games.diamanteclassico
           for i in $(seq 1 14); do sleep 10; xcrun simctl io "$ID" screenshot "fotos/foto_$((i*10))s.png" || true; done
           sleep 15
-          grep -a -h -i "TESTE_ADMOB|AdMobGodot|GADMobileAds|Google Mobile Ads"\|AdMobGodot" fotos/console.txt fotos/console_erro.txt fotos/log_sistema.txt | head -60 || true
+          grep -a -h -i -E "TESTE_ADMOB|AdMobGodot|GADMobileAds|Google Mobile Ads" fotos/console.txt fotos/console_erro.txt fotos/log_sistema.txt | head -60 || true
 
       - name: Fotos e console do simulador
         if: always() && inputs.simulador
