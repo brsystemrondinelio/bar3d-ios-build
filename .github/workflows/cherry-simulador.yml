@@ -13,6 +13,10 @@ on:
         description: "Quanto tempo fotografar depois de abrir"
         required: false
         default: "90"
+      ump:
+        description: "Simular regiao do formulario de privacidade do Google (us = estado dos EUA com lei, eea = Europa; vazio = regiao real). So funciona em build que le a variavel umpTeste."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -60,6 +64,7 @@ jobs:
       - name: Abrir no iPad e no iPhone e fotografar
         env:
           SEGUNDOS: ${{ inputs.segundos }}
+          SIMCTL_CHILD_umpTeste: ${{ inputs.ump }}
         run: |
           set -x
           APP=$(ls -d dd/Build/Products/*-iphonesimulator/*.app | head -1)
