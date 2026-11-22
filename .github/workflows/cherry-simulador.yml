@@ -54,7 +54,7 @@ jobs:
           set -o pipefail
           xcodebuild -workspace ios/Unity-iPhone.xcworkspace -scheme Unity-iPhone -configuration Release \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath dd \
-            CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build 2>&1 | tee xcode_sim.log | grep -E "error|warning: .*Firebase|BUILD" | tail -40
+            CODE_SIGNING_ALLOWED=NO ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO EXCLUDED_ARCHS=arm64 build 2>&1 | tee xcode_sim.log | grep -E "error|warning: .*Firebase|BUILD" | tail -40
           ls dd/Build/Products/*/
 
       - name: Abrir no iPad e no iPhone e fotografar
