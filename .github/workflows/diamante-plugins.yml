@@ -1,5 +1,5 @@
 # Diamante Classico (Godot 4.7.2): compila os plugins nativos do iPhone que o jogo usa -- barstore (compras pela
-# App Store, StoreKit) e admobios (anuncios do AdMob da R7: video, intersticial e banner) -- e guarda como artefato "plugins-diamante".
+# App Store, StoreKit) e admobios (anuncios do AdMob da R7: video premiado e intersticial) -- e guarda como artefato "plugins-diamante".
 # O zip vai para res://ios/plugins/ do projeto antes de exportar o projeto Xcode no Windows. So sob pedido.
 name: Diamante plugins iPhone
 

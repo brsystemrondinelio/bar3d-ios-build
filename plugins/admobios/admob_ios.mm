@@ -3,28 +3,17 @@
 #import <AppTrackingTransparency/AppTrackingTransparency.h>
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <dlfcn.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 
 // Fala com o SDK do AdMob (pod Google-Mobile-Ads-SDK) e com o formulario de privacidade do Google (pod
 // GoogleUserMessagingPlatform) pelo runtime do Objective-C. Vive na thread principal.
-// E o "fullScreenContentDelegate" do video e do intersticial e o "delegate" do banner: o SDK chama os metodos
-// adDidDismissFullScreenContent:, bannerViewDidReceiveAd: etc. abaixo.
-
-// Tamanho de anuncio do AdMob (o GADAdSize do SDK): largura x altura e um campo de opcoes.
-typedef struct {
-	CGSize size;
-	NSUInteger flags;
-} TamanhoDoAnuncio;
+// E o "fullScreenContentDelegate" do video e do intersticial: o SDK chama adDidDismissFullScreenContent: etc. abaixo.
 
 @interface AdMobIosHost : NSObject
 @property(nonatomic, assign) AdMobIos *owner;
 @property(nonatomic, strong) id video;
 @property(nonatomic, strong) id intersticial;
-@property(nonatomic, strong) UIView *banner;
-@property(nonatomic, assign) BOOL carregandoBanner;
-@property(nonatomic, assign) BOOL bannerFalhou;
 @end
 
 static NSString *textoDe(const String &s) {
@@ -150,7 +139,6 @@ static void conformaA(const char *protocolo) {
 		return;
 	}
 	conformaA("GADFullScreenContentDelegate");
-	conformaA("GADBannerViewDelegate");
 	id ads = ((id(*)(id, SEL))objc_msgSend)(c, NSSelectorFromString(@"sharedInstance"));
 	__weak AdMobIosHost *eu = self;
 	void (^pronto)(id) = ^(id estado) {
@@ -260,73 +248,6 @@ static void conformaA(const char *protocolo) {
 	}
 }
 
-// ---- banner (320x50 no alto, no meio, logo abaixo da area segura)
-
-- (void)carregaBanner {
-	if (self.carregandoBanner) {
-		return;
-	}
-	id pedido = pedidoNovo();
-	if (pedido == nil) {
-		return;
-	}
-	self.carregandoBanner = YES;
-	self.bannerFalhou = NO;
-	((void (*)(id, SEL, id))objc_msgSend)(self.banner, NSSelectorFromString(@"loadRequest:"), pedido);
-}
-
-- (void)mostraBanner:(NSString *)idBloco {
-	if (self.banner == nil) {
-		Class c = NSClassFromString(@"GADBannerView");
-		UIViewController *tela = telaDeCima();
-		if (c == nil || tela == nil) {
-			[self emite:"banner_falhou" texto:@"SDK do AdMob ausente"];
-			return;
-		}
-		TamanhoDoAnuncio tamanho = { CGSizeMake(320, 50), 0 };  // o GADAdSizeBanner do SDK
-		TamanhoDoAnuncio *doSdk = (TamanhoDoAnuncio *)dlsym(RTLD_DEFAULT, "GADAdSizeBanner");
-		if (doSdk != NULL) {
-			tamanho = *doSdk;
-		}
-		id banner = ((id(*)(id, SEL, TamanhoDoAnuncio))objc_msgSend)([c alloc], NSSelectorFromString(@"initWithAdSize:"), tamanho);
-		[banner setValue:idBloco forKey:@"adUnitID"];
-		[banner setValue:tela forKey:@"rootViewController"];
-		[banner setValue:self forKey:@"delegate"];
-		UIView *v = (UIView *)banner;
-		v.translatesAutoresizingMaskIntoConstraints = NO;
-		[tela.view addSubview:v];
-		[NSLayoutConstraint activateConstraints:@[
-			[v.topAnchor constraintEqualToAnchor:tela.view.safeAreaLayoutGuide.topAnchor],
-			[v.centerXAnchor constraintEqualToAnchor:tela.view.centerXAnchor],
-			[v.widthAnchor constraintEqualToConstant:tamanho.size.width],
-			[v.heightAnchor constraintEqualToConstant:tamanho.size.height],
-		]];
-		self.banner = v;
-		[self carregaBanner];
-	} else if (self.bannerFalhou) {
-		[self carregaBanner];  // a ultima tentativa falhou: tenta de novo agora que o jogo pediu
-	}
-	self.banner.hidden = NO;
-	[self.banner.superview bringSubviewToFront:self.banner];
-}
-
-- (void)escondeBanner {
-	self.banner.hidden = YES;
-}
-
-// ---- GADBannerViewDelegate
-
-- (void)bannerViewDidReceiveAd:(id)banner {
-	self.carregandoBanner = NO;
-	[self emite:"banner_carregado"];
-}
-
-- (void)bannerView:(id)banner didFailToReceiveAdWithError:(NSError *)erro {
-	self.carregandoBanner = NO;
-	self.bannerFalhou = YES;
-	[self emite:"banner_falhou" texto:erro.localizedDescription];
-}
-
 @end
 
 void AdMobIos::_bind_methods() {
@@ -340,8 +261,6 @@ void AdMobIos::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("carregaIntersticial", "id"), &AdMobIos::carregaIntersticial);
 	ClassDB::bind_method(D_METHOD("intersticialPronto"), &AdMobIos::intersticialPronto);
 	ClassDB::bind_method(D_METHOD("mostraIntersticial"), &AdMobIos::mostraIntersticial);
-	ClassDB::bind_method(D_METHOD("mostraBanner", "id"), &AdMobIos::mostraBanner);
-	ClassDB::bind_method(D_METHOD("escondeBanner"), &AdMobIos::escondeBanner);
 
 	ADD_SIGNAL(MethodInfo("consentimento_pronto", PropertyInfo(Variant::BOOL, "pode_anunciar")));
 	ADD_SIGNAL(MethodInfo("rastreamento_respondeu", PropertyInfo(Variant::INT, "status")));
@@ -354,8 +273,6 @@ void AdMobIos::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("intersticial_carregado"));
 	ADD_SIGNAL(MethodInfo("intersticial_falhou", PropertyInfo(Variant::STRING, "mensagem")));
 	ADD_SIGNAL(MethodInfo("intersticial_fechado"));
-	ADD_SIGNAL(MethodInfo("banner_carregado"));
-	ADD_SIGNAL(MethodInfo("banner_falhou", PropertyInfo(Variant::STRING, "mensagem")));
 }
 
 // O aviso vai para o laco do jogo (call_deferred): o SDK chama de qualquer thread.
@@ -451,21 +368,6 @@ void AdMobIos::mostraIntersticial() {
 	});
 }
 
-void AdMobIos::mostraBanner(const String &p_id) {
-	AdMobIosHost *h = host;
-	NSString *id_bloco = textoDe(p_id);
-	naThreadPrincipal(^{
-		[h mostraBanner:id_bloco];
-	});
-}
-
-void AdMobIos::escondeBanner() {
-	AdMobIosHost *h = host;
-	naThreadPrincipal(^{
-		[h escondeBanner];
-	});
-}
-
 AdMobIos::AdMobIos() {
 	host = [[AdMobIosHost alloc] init];
 	host.owner = this;
@@ -474,7 +376,6 @@ AdMobIos::AdMobIos() {
 AdMobIos::~AdMobIos() {
 	if (host) {
 		host.owner = nullptr;
-		[host.banner removeFromSuperview];
 		host = nil;
 	}
 }
