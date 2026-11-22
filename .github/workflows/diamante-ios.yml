@@ -86,7 +86,7 @@ jobs:
         run: |
           set -o pipefail
           cd diamante_ios
-          xcodebuild -workspace DiamanteClassico.xcworkspace -scheme DiamanteClassico -configuration Release             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO             -derivedDataPath ../sim CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ../xcode_sim.log | tail -20
+          xcodebuild -workspace DiamanteClassico.xcworkspace -scheme DiamanteClassico -configuration Release             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO             -derivedDataPath ../sim CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ../xcode_sim.log | tail -20
 
       - name: Abrir no iPhone simulado
         if: inputs.simulador
