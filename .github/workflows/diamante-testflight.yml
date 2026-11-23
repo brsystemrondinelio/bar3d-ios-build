@@ -1,0 +1,102 @@
+# Diamante Classico (Godot 4.7.2) para o TestFlight: baixa o projeto Xcode exportado no Windows (mesma pasta e chave
+# do Cherry/Pocket), poe o SDK do AdMob da R7 (pods), ASSINA com a chave da App Store Connect e ENVIA ao TestFlight.
+# Pedido do dono, 23/11/2026 ("consegue fazer sozinho?"). Nao envia para revisao da App Store. So dispara sob pedido.
+name: Diamante iPhone (TestFlight)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pacote:
+        description: "Arquivo do pacote no servidor (ex.: diamante_ios_1.0.0_1.tar.gz)"
+        required: true
+        default: "diamante_ios_1.0.0_1.tar.gz"
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      BUNDLE_ID: com.r7games.diamanteclassico
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+    steps:
+      - name: Xcode mais novo instalado
+        run: |
+          NOVO=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$NOVO/Contents/Developer"
+          xcodebuild -version
+
+      - name: Ferramentas de assinatura e envio
+        run: |
+          python3 -m venv "$HOME/cm"
+          "$HOME/cm/bin/pip" install --quiet codemagic-cli-tools
+          echo "$HOME/cm/bin" >> "$GITHUB_PATH"
+
+      - name: Baixar o projeto Xcode do servidor
+        env:
+          CHAVE_BUILD: ${{ secrets.CHAVE_BUILD_CHERRY }}
+          PACOTE: ${{ inputs.pacote }}
+        run: |
+          set -e
+          curl -fsSL --retry 3 -H "X-Chave-Build: $CHAVE_BUILD"             -o projeto.tar.gz "https://jogosonline.top/_build/cherry-ios/$PACOTE"
+          tar -xzf projeto.tar.gz
+          ls diamante_ios
+
+      - name: Instalar o SDK do AdMob (CocoaPods)
+        run: |
+          set -e
+          cd diamante_ios
+          # O Godot grava OTHER_LDFLAGS do app SEM $(inherited): sem isto as opcoes dos pods (-ObjC e
+          # -framework GoogleMobileAds) nao chegam ao app e o SDK fica de fora (o plugin acha as classes pelo nome).
+          perl -pi -e 's/OTHER_LDFLAGS = "\$\(LD_CLASSIC/OTHER_LDFLAGS = "\$(inherited) -ObjC \$(LD_CLASSIC/' DiamanteClassico.xcodeproj/project.pbxproj
+          grep -n "OTHER_LDFLAGS" DiamanteClassico.xcodeproj/project.pbxproj
+          cat > Podfile <<'POD'
+          source 'https://cdn.cocoapods.org/'
+          platform :ios, '15.0'
+          use_frameworks!
+          target 'DiamanteClassico' do
+            pod 'Google-Mobile-Ads-SDK', '13.12.0'
+            pod 'GoogleUserMessagingPlatform', '3.1.0'
+          end
+          post_install do |installer|
+            installer.generated_projects.each do |projeto|
+              projeto.targets.each do |alvo|
+                alvo.build_configurations.each do |config|
+                  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+                end
+              end
+            end
+          end
+          POD
+          pod install
+
+      - name: Assinatura (certificado e perfil na Apple)
+        run: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles --project diamante_ios/DiamanteClassico.xcodeproj
+
+      - name: Compilar o .ipa
+        run: |
+          set -o pipefail
+          xcode-project build-ipa --workspace diamante_ios/DiamanteClassico.xcworkspace --scheme DiamanteClassico 2>&1 | tee xcode_build.log | tail -60
+
+      - name: Enviar ao TestFlight
+        run: |
+          app-store-connect publish --path build/ios/ipa/*.ipa
+
+      - name: Log da compilacao (se falhar)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode_build_log
+          path: |
+            xcode_build.log
+            /tmp/xcodebuild_logs/*.log
